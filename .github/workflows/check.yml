@@ -1,0 +1,75 @@
+name: check
+
+on:
+  push:
+    branches: [ master ]
+  # schedule:
+  #   - cron: '0 1 * * *'
+
+jobs:
+  check:
+    name: check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.1.2"
+
+      - name: get latest release
+        run: echo "LATEST_RELEASE=$(ruby get-latest-release.rb)" >> $GITHUB_ENV
+
+      - name: get latest build
+        run: echo "LATEST_BUILD=$(ruby get-latest-build.rb)" >> $GITHUB_ENV
+
+      - name: create a tag if needed
+        uses: actions/github-script@v6
+        with:
+          result-encoding: string
+          script: |
+            core.warning(`LATEST_RELEASE = ${process.env.LATEST_RELEASE}`);
+            core.warning(`LATEST_BUILD   = ${process.env.LATEST_BUILD}`);
+
+            if (process.env.LATEST_RELEASE === process.env.LATEST_BUILD) {
+              const message = "Up to date";
+              core.warning(message);
+              return message;
+            }
+
+            const tag = `v${process.env.LATEST_RELEASE}`;
+            core.warning(`tag = ${tag}`);
+
+            // Make sure it doesn't exist
+            try {
+              const currentRef = await github.rest.git.getRef({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: `tags/${tag}`,
+              });
+
+              console.log(currentRef);
+
+              core.setFailed("Something is wrong. The tag already exists.");
+            } catch(e) {
+              // keep going, we are safe
+            }
+
+            // Get the latest commit
+            const latestCommit = await github.rest.git.getRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `heads/master`,
+            });
+            const latestSHA = latestCommit.data.object.sha;
+
+            console.log(latestSHA);
+
+            // And attach a tag to it
+            const newRef = await github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: `refs/tags/${tag}`,
+              sha: latestSHA,
+            });
+            console.log(newRef);
