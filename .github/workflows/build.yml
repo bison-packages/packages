@@ -45,9 +45,6 @@ jobs:
       - name: show compiled build
         run: find build
 
-      - name: remove documentation
-        run: rm -r build/share
-
       - name: print build info
         run: ./build/bin/bison --version && ./build/bin/bison --help
 
